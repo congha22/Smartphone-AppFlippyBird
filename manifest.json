@@ -1,0 +1,15 @@
+{
+  "Name": "Smartphone Flippy Bird",
+  "Author": "d5a1lamdtd",
+  "Version": "1.0.0",
+  "Description": "Adds Flippy Bird landscape game app to Smartphone.",
+  "UniqueID": "d5a1lamdtd.Smartphone-FlippyBird",
+  "EntryDll": "Smartphone-FlippyBird.dll",
+  "MinimumApiVersion": "4.0.0",
+  "Dependencies": [
+    {
+      "UniqueID": "d5a1lamdtd.Smartphone",
+      "IsRequired": true
+    }
+  ]
+}
