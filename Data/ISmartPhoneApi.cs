@@ -76,7 +76,7 @@ namespace SmartphoneFlippyBird.Data
 
         Texture2D? GetPhoneBackgroundTexture();
 
-        void DrawPhoneSizeButtons(SpriteBatch b, int phoneX, int phoneY);
+        void DrawPhoneSizeButtons(SpriteBatch b, int phoneX, int phoneY, bool landscape = false, bool forceOn = false);
 
         bool HandlePhoneSizeButtonsClick(int x, int y, int phoneX, int phoneY);
 

@@ -100,11 +100,13 @@ namespace SmartphoneFlippyBird
 
             // Retrieve phone positioning and dimensions
             var (px, py) = api.GetPhonePosition();
-            this.xPositionOnScreen = px;
-            this.yPositionOnScreen = py;
-
             this.phoneFrameWidth = api.GetPhoneFrameWidth();
             this.phoneFrameHeight = api.GetPhoneFrameHeight();
+
+            // Center-rotate the position from portrait to landscape
+            this.xPositionOnScreen = px + (this.phoneFrameWidth - this.phoneFrameHeight) / 2;
+            this.yPositionOnScreen = py + (this.phoneFrameHeight - this.phoneFrameWidth) / 2;
+
             var (offX, offY) = api.GetPhoneContentOffset();
             this.phoneContentOffsetX = offX;
             this.phoneContentOffsetY = offY;
@@ -162,6 +164,12 @@ namespace SmartphoneFlippyBird
             float currentScale = this.smartphoneApi.GetPhoneUiScale();
             if (Math.Abs(currentScale - this.phoneUiScale) > 0.001f)
             {
+                // Capture the current landscape center before updating dimensions
+                int oldH = this.phoneFrameHeight;
+                int oldW = this.phoneFrameWidth;
+                int centerX = this.xPositionOnScreen + oldH / 2;
+                int centerY = this.yPositionOnScreen + oldW / 2;
+
                 this.phoneUiScale = currentScale;
                 this.phoneFrameWidth = this.smartphoneApi.GetPhoneFrameWidth();
                 this.phoneFrameHeight = this.smartphoneApi.GetPhoneFrameHeight();
@@ -173,6 +181,15 @@ namespace SmartphoneFlippyBird
 
                 this.width = this.phoneFrameHeight;
                 this.height = this.phoneFrameWidth;
+
+                // Position the new landscape frame around the same center point
+                this.xPositionOnScreen = centerX - this.phoneFrameHeight / 2;
+                this.yPositionOnScreen = centerY - this.phoneFrameWidth / 2;
+
+                // Sync the center-rotated portrait position globally
+                int px = this.xPositionOnScreen - (this.phoneFrameWidth - this.phoneFrameHeight) / 2;
+                int py = this.yPositionOnScreen - (this.phoneFrameHeight - this.phoneFrameWidth) / 2;
+                this.smartphoneApi.SetPhonePosition(px, py);
 
                 if (this.phoneBackgroundTexture != null && !this.phoneBackgroundTexture.IsDisposed)
                 {
@@ -196,7 +213,10 @@ namespace SmartphoneFlippyBird
             {
                 this.xPositionOnScreen = Game1.getMouseX() - this.dragOffsetX;
                 this.yPositionOnScreen = Game1.getMouseY() - this.dragOffsetY;
-                this.smartphoneApi.SetPhonePosition(this.xPositionOnScreen, this.yPositionOnScreen);
+                
+                int px = this.xPositionOnScreen - (this.phoneFrameWidth - this.phoneFrameHeight) / 2;
+                int py = this.yPositionOnScreen - (this.phoneFrameHeight - this.phoneFrameWidth) / 2;
+                this.smartphoneApi.SetPhonePosition(px, py);
             }
 
             if (this.state == GameState.Start)
@@ -394,16 +414,19 @@ namespace SmartphoneFlippyBird
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
         {
-            // Map click back to portrait coordinate offsets relative to the top-left for navigation buttons
-            int px_click = this.xPositionOnScreen + (this.yPositionOnScreen + this.phoneFrameWidth - y);
-            int py_click = this.yPositionOnScreen + (x - this.xPositionOnScreen);
+            int px = this.xPositionOnScreen - (this.phoneFrameWidth - this.phoneFrameHeight) / 2;
+            int py = this.yPositionOnScreen - (this.phoneFrameHeight - this.phoneFrameWidth) / 2;
 
-            if (this.smartphoneApi.HandlePhoneAppBottomNavClick(px_click, py_click, this.xPositionOnScreen, this.yPositionOnScreen, onBack: this.onBack))
+            // Map click back to portrait coordinate offsets relative to the top-left for navigation buttons
+            int px_click = px + (this.yPositionOnScreen + this.phoneFrameWidth - y);
+            int py_click = py + (x - this.xPositionOnScreen);
+
+            if (this.smartphoneApi.HandlePhoneAppBottomNavClick(px_click, py_click, px, py, onBack: this.onBack))
             {
                 return;
             }
 
-            if (this.smartphoneApi.HandlePhoneSizeButtonsClick(px_click, py_click, this.xPositionOnScreen, this.yPositionOnScreen))
+            if (this.smartphoneApi.HandlePhoneSizeButtonsClick(px_click, py_click, px, py))
             {
                 return;
             }
@@ -514,7 +537,7 @@ namespace SmartphoneFlippyBird
             }
 
             // Draw custom size control buttons on the bezel rotated
-            DrawSizeButtons(b);
+            this.smartphoneApi.DrawPhoneSizeButtons(b, this.xPositionOnScreen, this.yPositionOnScreen, landscape: true);
 
             // Draw standard mouse cursor
             drawMouse(b);
@@ -735,46 +758,6 @@ namespace SmartphoneFlippyBird
                 int x = (int)Math.Sqrt(r * r - y * y);
                 b.Draw(Game1.staminaRect, new Rectangle((int)(center.X - x), (int)(center.Y + y), x * 2, 1), color);
             }
-        }
-
-        private void DrawSizeButtons(SpriteBatch b)
-        {
-            int buttonY = scaleVal(975);
-            int smallButtonY = buttonY + scaleVal(68);
-            int smallButtonW = scaleVal(28);
-            int smallButtonH = scaleVal(28);
-
-            var decRectPortrait = new Rectangle(scaleVal(315), smallButtonY, smallButtonW, smallButtonH);
-            var incRectPortrait = new Rectangle(scaleVal(351), smallButtonY, smallButtonW, smallButtonH);
-
-            Rectangle decRectLandscape = PortraitToLandscape(decRectPortrait);
-            Rectangle incRectLandscape = PortraitToLandscape(incRectPortrait);
-
-            int mx = Game1.getMouseX(true);
-            int my = Game1.getMouseY(true);
-
-            Color decColor = decRectLandscape.Contains(mx, my) ? Color.LightGray : Color.White * 0.9f;
-            Color incColor = incRectLandscape.Contains(mx, my) ? Color.LightGray : Color.White * 0.9f;
-
-            DrawButton(b, decRectLandscape, decColor, "-", Game1.smallFont, 0.7f * this.phoneUiScale, Color.Black);
-            DrawButton(b, incRectLandscape, incColor, "+", Game1.smallFont, 0.7f * this.phoneUiScale, Color.Black);
-        }
-
-        private static void DrawButton(SpriteBatch b, Rectangle bounds, Color fillColor, string text, SpriteFont font, float scale, Color textColor)
-        {
-            Color highlight = new Color(Math.Min(255, (int)(fillColor.R * 1.3f)), Math.Min(255, (int)(fillColor.G * 1.3f)), Math.Min(255, (int)(fillColor.B * 1.3f)), fillColor.A);
-            Color shadow = new Color((int)(fillColor.R * 0.6f), (int)(fillColor.G * 0.6f), (int)(fillColor.B * 0.6f), fillColor.A);
-
-            b.Draw(Game1.staminaRect, bounds, fillColor);
-            b.Draw(Game1.staminaRect, new Rectangle(bounds.X, bounds.Y, bounds.Width, 2), highlight);
-            b.Draw(Game1.staminaRect, new Rectangle(bounds.X, bounds.Y, 2, bounds.Height), highlight);
-            b.Draw(Game1.staminaRect, new Rectangle(bounds.X, bounds.Bottom - 2, bounds.Width, 2), shadow);
-            b.Draw(Game1.staminaRect, new Rectangle(bounds.Right - 2, bounds.Y, 2, bounds.Height), shadow);
-
-            Vector2 txtSize = font.MeasureString(text) * scale;
-            Vector2 txtPos = new Vector2(bounds.Center.X - (txtSize.X / 2f), bounds.Center.Y - (txtSize.Y / 2f));
-            b.DrawString(font, text, txtPos + new Vector2(1f, 1f), Color.Black * 0.3f, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
-            b.DrawString(font, text, txtPos, textColor, 0f, Vector2.Zero, scale, SpriteEffects.None, 1f);
         }
     }
 }
